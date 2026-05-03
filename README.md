@@ -1,44 +1,60 @@
 # voxy-server-side-ekaii
 
-ekaii fork / mirror of [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) by **Xantha** (MIT).
+ekaii fork of [VoX/lod-server-support](https://github.com/VoX/lod-server-support) (the open-source MIT upstream of the LOD-streaming-server-plugin family).
 
 > Sends pre-generated chunk LOD column data from server to clients running the [Voxy](https://github.com/MCRcortex/voxy) client mod, so distant terrain is rendered without players having to explore first.
 
+## Lineage
+
+The Modrinth project [voxy-server-side](https://modrinth.com/plugin/voxy-server-side) by **Xantha** is a 1:1 rebrand of VoX's open-source `lod-server-support` (verified 2026-05-04 by class-list diff: 88/88 source files match after `dev.vox.lss → dev.xantha.vss` rename, only difference is Xantha stripped VoX's 13 test files). VoX called this out publicly via PR #4 (since renamed to "Closed") and reached out via the softer PR #5. **VoX is the legitimate upstream.** Xantha's JAR + Modrinth presence captured user mindshare without contributing back. Our fork bases on VoX directly.
+
 ## Why this fork exists
 
-Upstream is **closed-source** (MIT license shipped in the JAR but no public repo). We need a maintainable source-tree to:
+The upstream targets paper-api 1.21.11 and has **zero Folia awareness**. To run on our `creaekaii` server (which uses Luminol 26.1.2, a Folia derivative), the plugin must:
 
-1. Run on **Folia / Luminol 26.1.2** (upstream is `BukkitRunnable`-based — does not even load on Folia).
-2. Pair it with our existing `distant-horizons-server-plugin-ekaii` and `luminol-ekaii` stack on `creaekaii`.
-3. Eventually integrate with our `voxy-vulkan-research` macOS-native client port.
+1. Bump paper-api 1.21.11 → 26.1.2 (matches our Luminol stack).
+2. Add `folia-supported: true` + runtime detection so a single jar runs on both Paper and Folia/Luminol.
+3. Fix correctness bugs identified during the deep code review (~30 P0 findings across `common/`, `fabric/`, and `paper/`).
 
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `upstream-jars/` | Pristine 0.3.0 JARs from Modrinth (paper + fabric + nested common). Reference binaries. |
-| `decompiled-source/{paper,fabric,common}/` | jadx-decompiled Java. 146 files, 4 inner-class jadx WARN, no JADX ERROR. Compiles cleanly modulo paperweight + loom setup. |
-| `work/` | Multi-module Gradle project (paper + fabric + common). To be filled in subsequent sessions. |
-| `docs/` | `ARCHITECTURE.md`, `IMPROVEMENT_AXES.md`, `HANDOFF.md`. |
-| `LICENSE` | Upstream MIT, copyright Xantha 2026. Preserved verbatim. |
+| `work/` | **Working tree — fork of VoX/lod-server-support.** Multi-module Gradle (common + fabric + paper). Edits land here. |
+| `upstream-jars/` | Pristine 0.3.0 binaries from Modrinth (Xantha's rebrand). Reference for wire-protocol comparison. |
+| `docs/CODE_REVIEW.md` | All findings (P0/P1/P2) from 4 parallel deep-read agents. |
+| `docs/ARCHITECTURE.md` | Architecture brief (protocol v15, threading, mixins, dirty tracking). |
+| `docs/IMPROVEMENT_AXES.md` | Prioritized roadmap for upstream PRs vs. fork-only patches. |
+| `docs/HANDOFF.md` | Multi-session continuation pointer (autonomous-loop). |
+| `docs/forensic/decompiled-xantha-0.3.0/` | jadx output of Xantha's 0.3.0 JAR. Forensic exhibit only — proof of the rebrand. **Not a working base.** |
+| `LICENSE` | MIT (preserved verbatim from VoX upstream). |
 
-## Upstream provenance
+## Build (baseline upstream, no edits yet)
 
-- Project ID `84zcagOb` on Modrinth.
-- Fabric 0.3.0 (`gcsu1Tiz`, 2026-04-16) — MC 26.1 / 26.1.1 / 26.1.2.
-- Paper 0.3.0 (`S1TM384w`, 2026-05-02) — MC 26.1.2.
-- Author: Xantha (no public Git repo — searched GitHub / GitLab / Codeberg).
-- License: MIT (full text in `LICENSE`). Decompilation + redistribution + modification permitted.
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home \
+PATH=$JAVA_HOME/bin:$PATH \
+  cd work && ./gradlew :common:build :paper:shadowJar :fabric:build -x runGameTest -x runClientGameTest
+```
+
+Outputs:
+- `work/common/build/libs/common-0.3.0.jar`
+- `work/paper/build/libs/lod-server-support-paper.jar` (currently 1.21.11; bump to 26.1.2 in progress)
+- `work/fabric/build/libs/lod-server-support-fabric.jar` (already 26.1.2)
 
 ## Status
 
-- [x] Investigation done — see `docs/ARCHITECTURE.md`.
-- [x] Improvement axes identified — see `docs/IMPROVEMENT_AXES.md`.
-- [ ] Gradle multi-module skeleton (paperweight-userdev 2.0 + fabric-loom 1.16.x).
-- [ ] Folia/Luminol port (P0).
-- [ ] CI: `.forgejo/workflows/build.yml` (node:20-bookworm + setup-java@v4 + upload-artifact@v3).
-- [ ] Smoke harness: drop on Luminol 26.1.2 + Voxy 0.2.14-alpha client.
+- [x] Pivoted workspace from decompiled-Xantha to VoX-source. Decompile kept under `docs/forensic/`.
+- [x] Deep code review (4 parallel agents, ~70 findings). See `docs/CODE_REVIEW.md`.
+- [x] Baseline upstream build green (JDK 25, Gradle 9.4, paperweight 2.0.0-beta.19).
+- [ ] Bump paper module from paper-api 1.21.11 → 26.1.2.
+- [ ] Folia port (single-jar runtime detection via `PlatformDispatch` helper).
+- [ ] Fix high-impact P0 bugs (executor leak, dedup race on disconnect, dimensionStringCache leak).
+- [ ] CI: `.forgejo/workflows/build.yml` (node:20-bookworm + setup-java@v4 JDK 25 + upload-artifact@v3).
+- [ ] Smoke harness on Luminol 26.1.2 + Voxy client.
+- [ ] Tag release `v0.3.0-ekaii-1.0.0`. Push to forgejo + github mirrors.
+- [ ] Submit Folia port as upstream PR to `VoX/lod-server-support`.
 
-## Pairing
+## Wire protocol contract (must preserve)
 
-Designed to talk to the **Voxy client mod ≥ 0.2.14-alpha**. Wire protocol version is **15** (constant `dev.xantha.vss.common.VSSConstants.PROTOCOL_VERSION`). Client and server must match exactly — no ViaVersion translation, the client emergency-disables on first decode error.
+Protocol version **15**. Channels: `lss:handshake_c2s`, `lss:session_config`, `lss:batch_chunk_req`, `lss:batch_response`, `lss:voxel_column`, `lss:cancel_request`, `lss:bandwidth_update`, `lss:dirty_columns`. Position packing `((long)cx << 32) | (cz & 0xFFFFFFFFL)`. Response type bytes `0=RATE_LIMITED, 1=UP_TO_DATE, 2=NOT_GENERATED`. Dimension ordinals `0=OW, 1=Nether, 2=End, -1=custom + writeUtf(256)`. Bounds: `MAX_BATCH_CHUNK_REQUESTS=1024, MAX_BATCH_RESPONSES=4096, MAX_DIRTY_COLUMNS=10240, MAX_SECTIONS_SIZE=2 MiB`. Any change to these breaks all upstream / Xantha / our-fork clients.

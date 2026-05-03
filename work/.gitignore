@@ -1,0 +1,27 @@
+.gradle/
+build/
+.idea/
+*.iml
+*.ipr
+*.iws
+run/
+out/
+.fabric/
+remappedSrc/
+test-server/
+libs/
+logs/
+fabric/config/
+net/
+org/
+research/
+bin/
+
+benchmark-results/
+benchmark-worlds/
+
+# Oracle mod (standalone, never committed to main)
+oracle/
+
+# Git worktrees
+.worktrees/

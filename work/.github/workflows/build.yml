@@ -1,0 +1,37 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build + Unit Tests + Server GameTests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Build Fabric + Tier 1 & 2 tests
+        run: ./gradlew :fabric:build -x runClientGameTest
+
+      - name: Build Paper plugin
+        run: ./gradlew :paper:shadowJar
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: lod-server-support-fabric
+          path: fabric/build/libs/*.jar
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: lod-server-support-paper
+          path: paper/build/libs/*.jar

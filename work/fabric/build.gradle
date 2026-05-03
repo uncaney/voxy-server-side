@@ -1,0 +1,106 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    archiveVersion = ''
+}
+
+repositories {
+    mavenCentral()
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+    implementation project(':common')
+    include project(':common')
+    compileOnly "maven.modrinth:sodium:mc26.1.1-0.8.9-fabric"
+    compileOnly "maven.modrinth:modmenu:18.0.0-alpha.8"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = "lss-test"
+        enableGameTests = true
+        enableClientGameTests = true
+        eula = true
+    }
+}
+
+loom {
+    runs {
+        register("benchmarkServer") {
+            server()
+            runDir "build/run/benchmark-server"
+            vmArg "-Dlss.benchmark=true"
+            vmArg "-Dlss.benchmark.duration=${findProperty('benchmark.duration') ?: '60'}"
+            vmArg "-XX:StartFlightRecording=filename=server-benchmark.jfr,settings=profile,disk=true"
+            programArg "--nogui"
+        }
+        register("benchmarkClient") {
+            client()
+            runDir "build/run/benchmark-client"
+            vmArg "-Dlss.benchmark=true"
+            vmArg "-XX:StartFlightRecording=filename=client-benchmark.jfr,settings=profile,disk=true"
+            programArg "--quickPlayMultiplayer"
+            programArg "localhost:25565"
+        }
+    }
+}
+
+afterEvaluate {
+    loom.runs.configureEach {
+        if (name.toLowerCase().contains("gametest")) {
+            vmArg "-Dlss.test.integratedServer=true"
+        }
+        if (name.toLowerCase().contains("clientgametest")) {
+            vmArg "-Dfabric.client.gametest.disableNetworkSynchronizer=true"
+        }
+    }
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": inputs.properties.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+}
+
+jar {
+    inputs.property "archivesName", project.base.archivesName
+
+    from(rootProject.file("LICENSE")) {
+        rename { "${it}_${inputs.properties.archivesName}" }
+    }
+}
