@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "vss",
+  "version": "0.3.0",
+  "name": "Voxy Server Side",
+  "description": "Render distant Voxy LODs on servers",
+  "authors": [
+    "Xantha"
+  ],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/voxy-server-side"
+  },
+  "license": "MIT",
+  "icon": "assets/vss/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "dev.xantha.vss.VSSMod"
+    ],
+    "client": [
+      "dev.xantha.vss.VSSClient"
+    ],
+    "sodium:config_api_user": [
+      "dev.xantha.vss.config.VSSConfigMenu"
+    ],
+    "modmenu": [
+      "dev.xantha.vss.config.VSSModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    "vss.mixins.json"
+  ],
+  "depends": {
+    "minecraft": "\u003e\u003d26.1",
+    "fabricloader": "\u003e\u003d0.18.4",
+    "fabric-api": "\u003e\u003d0.146.0"
+  },
+  "suggests": {
+    "sodium": "\u003e\u003d0.8.7",
+    "modmenu": "*",
+    "voxy": "\u003e\u003d0.2.14-alpha"
+  },
+  "jars": [
+    {
+      "file": "META-INF/jars/common-0.3.0.jar"
+    }
+  ]
+}

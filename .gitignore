@@ -1,0 +1,22 @@
+# Gradle / build artifacts
+work/build/
+work/.gradle/
+work/*/build/
+work/*/.gradle/
+**/build/
+**/.gradle/
+**/out/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+.DS_Store
+
+# Local server runs / smoke harness state
+**/run/
+**/test-server/
+*.log
+
+# Local decompile workdirs (kept under voxy-server-side-research/ outside repo)

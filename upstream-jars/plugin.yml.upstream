@@ -1,0 +1,16 @@
+name: VoxyServerSide
+version: '0.3.0'
+main: dev.xantha.vss.paper.VSSPaperPlugin
+api-version: '1.21'
+description: Render distant Voxy LODs on servers
+author: Xantha
+website: https://modrinth.com/plugin/voxy-server-side
+commands:
+  vsslod:
+    description: Voxy Server Side admin commands
+    usage: /vsslod <stats|diag>
+    permission: vss.admin
+permissions:
+  vss.admin:
+    description: Access to VSS admin commands
+    default: op
