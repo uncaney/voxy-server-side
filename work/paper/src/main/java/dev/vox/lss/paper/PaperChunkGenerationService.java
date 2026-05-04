@@ -9,7 +9,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.plugin.Plugin;
 
@@ -106,10 +105,17 @@ public class PaperChunkGenerationService {
                 LSSLogger.error("Async chunk load failed at " + cx + "," + cz, ex);
             }
             var readyChunk = ex == null ? chunk : null;
-            // Ensure callback runs on the main thread — whenComplete does not guarantee thread
+            // Ensure callback runs on the right thread — whenComplete does not guarantee thread.
+            // On vanilla Paper, route to the main thread via GlobalRegionScheduler.
+            // On Folia, route to the chunk's region thread so getChunkNow() is legal there.
             try {
-                Bukkit.getScheduler().runTask(this.plugin, () ->
-                        onChunkReady(key, level, readyChunk, cx, cz));
+                if (PlatformDispatch.IS_FOLIA) {
+                    PlatformDispatch.runOnRegion(this.plugin, level.getWorld(), cx, cz,
+                            () -> onChunkReady(key, level, readyChunk, cx, cz));
+                } else {
+                    PlatformDispatch.runOnGlobal(this.plugin,
+                            () -> onChunkReady(key, level, readyChunk, cx, cz));
+                }
             } catch (Exception scheduleEx) {
                 // Plugin disabled during shutdown — do not call onChunkReady inline
                 // because we're on an async thread and active map is not thread-safe.

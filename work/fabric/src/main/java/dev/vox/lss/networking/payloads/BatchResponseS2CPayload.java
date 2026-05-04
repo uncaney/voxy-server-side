@@ -18,6 +18,14 @@ public record BatchResponseS2CPayload(
     public static final StreamCodec<FriendlyByteBuf, BatchResponseS2CPayload> CODEC =
             StreamCodec.of(
                     (buf, payload) -> {
+                        // Encoder must enforce the same MAX_BATCH_RESPONSES bound as the
+                        // decoder; otherwise the server can produce a payload that every
+                        // client rejects on parse. SendActionBatcher should split before
+                        // this is reached, but this assertion is the safety net.
+                        if (payload.count < 0 || payload.count > LSSConstants.MAX_BATCH_RESPONSES) {
+                            throw new IllegalArgumentException(
+                                    "Batch response count out of range (encoder): " + payload.count);
+                        }
                         buf.writeVarInt(payload.count);
                         for (int i = 0; i < payload.count; i++) {
                             buf.writeByte(payload.responseTypes[i]);

@@ -11,7 +11,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.plugin.messaging.PluginMessageListener;
-import org.bukkit.scheduler.BukkitRunnable;
 
 /**
  * Paper plugin entry point for LOD Server Support.
@@ -53,18 +52,18 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
             cmd.setTabCompleter(executor);
         }
 
-        // Tick the processing service every server tick (50ms)
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                var service = requestService;
-                if (service != null) {
-                    service.tick();
-                }
+        // Tick the processing service every server tick (50ms).
+        // Uses GlobalRegionScheduler for Folia compatibility — on vanilla Paper this routes
+        // to the main thread; on Folia it routes to the global region thread.
+        PlatformDispatch.runRepeating(this, () -> {
+            var service = this.requestService;
+            if (service != null) {
+                service.tick();
             }
-        }.runTaskTimer(this, 1L, 1L);
+        }, 1L, 1L);
 
-        LSSLogger.info("LOD Server Support (Paper) enabled");
+        LSSLogger.info("LOD Server Support (Paper) enabled"
+                + (PlatformDispatch.IS_FOLIA ? " — Folia/Luminol mode" : ""));
     }
 
     @Override

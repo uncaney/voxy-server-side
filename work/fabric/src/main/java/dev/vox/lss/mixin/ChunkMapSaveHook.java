@@ -12,8 +12,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ChunkMap.class)
 public class ChunkMapSaveHook {
+    // Defensive: chunks save on the main server thread today, but a future MC
+    // change or a mod calling save() from a different thread would expose a
+    // visibility race on this cached field. Volatile is the cheap belt.
     @Unique
-    private String lss$cachedDimension;
+    private volatile String lss$cachedDimension;
 
     @Inject(method = "save", at = @At("RETURN"))
     private void lss$onChunkSaved(ChunkAccess chunk, CallbackInfoReturnable<Boolean> cir) {

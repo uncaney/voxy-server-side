@@ -12,6 +12,7 @@ import dev.vox.lss.common.processing.TickDiagnostics;
 import dev.vox.lss.common.processing.TickSnapshot;
 import dev.vox.lss.common.tracking.DirtyColumnTracker;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.server.MinecraftServer;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -46,7 +48,9 @@ public class PaperRequestProcessingService {
     private final PaperDirtyColumnBroadcaster dirtyBroadcaster;
 
     private final long startTimeNanos = System.nanoTime();
-    private final Map<ServerLevel, String> dimensionStringCache = new HashMap<>();
+    // Weak-keyed so an unloaded ServerLevel can be GC'd. Strong-keyed HashMap leaked
+    // ~hundreds of bytes per dynamically-loaded dimension (e.g. datapack reload).
+    private final Map<ServerLevel, String> dimensionStringCache = new WeakHashMap<>();
 
     private int diagLogCounter = 0;
 
@@ -298,6 +302,16 @@ public class PaperRequestProcessingService {
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PaperPlayerRequestState state, ServerLevel level,
             LongOpenHashSet skipPositions) {
+        // On Folia, the global region tick thread does not own arbitrary chunks; calling
+        // getChunkNow() for a chunk owned by another region throws an IllegalStateException
+        // (region-thread check). We can't synchronously probe without dispatching one
+        // RegionScheduler task per chunk (high overhead × MAX_PROBES_PER_TICK_PER_PLAYER).
+        // Instead, skip the optimisation entirely on Folia and let the disk reader pool
+        // serve every request — adds ~1 tick of latency but keeps the global tick simple.
+        if (PlatformDispatch.IS_FOLIA) {
+            return Long2ObjectMaps.emptyMap();
+        }
+
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
@@ -386,10 +400,13 @@ public class PaperRequestProcessingService {
                 this.bandwidthLimiter.recordSend(queued.estimatedBytes());
                 this.diag.recordSectionSent(queued.estimatedBytes());
             } catch (Exception e) {
-                LSSLogger.error("Failed to send queued payload to " + state.getPlayer().getName().getString()
-                        + ", dropping remaining queue (" + queue.size() + " entries)", e);
-                queue.clear();
-                return;
+                // Drop only the failing payload; transient netty backpressure shouldn't wipe
+                // hundreds of pending payloads. Log and continue. If the channel is genuinely
+                // closed, every payload will throw and the queue will drain naturally.
+                LSSLogger.warn("Failed to send queued payload to "
+                        + state.getPlayer().getName().getString()
+                        + " (requestId=" + queued.requestId() + "), dropping this payload only", e);
+                queue.poll();
             }
         }
     }

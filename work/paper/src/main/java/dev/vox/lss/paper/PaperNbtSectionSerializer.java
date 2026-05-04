@@ -85,7 +85,7 @@ final class PaperNbtSectionSerializer {
             buf.writeVarInt(parsed.size());
             for (var p : parsed) {
                 buf.writeByte(p.sectionY);
-                p.section.write(buf, null, 0);
+                p.section.write(buf);
 
                 boolean hasBlockLight = p.blockLight.length == 2048;
                 buf.writeBoolean(hasBlockLight);

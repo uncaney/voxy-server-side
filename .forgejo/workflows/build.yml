@@ -1,0 +1,122 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-bookworm
+    defaults:
+      run:
+        working-directory: work
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('work/**/*.gradle', 'work/gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Build
+        run: ./gradlew --no-daemon --console=plain :common:build :paper:shadowJar :fabric:build -x runGameTest -x runClientGameTest
+
+      - name: Tier 1 unit tests
+        run: ./gradlew --no-daemon --console=plain :fabric:test -x runGameTest -x runClientGameTest
+
+      - name: Upload paper jar
+        uses: actions/upload-artifact@v3
+        with:
+          name: lod-server-support-paper-ekaii
+          path: work/paper/build/libs/lod-server-support-paper.jar
+
+      - name: Upload fabric jar
+        uses: actions/upload-artifact@v3
+        with:
+          name: lod-server-support-fabric-ekaii
+          path: work/fabric/build/libs/lod-server-support-fabric.jar
+
+      - name: Upload common jar
+        uses: actions/upload-artifact@v3
+        with:
+          name: lod-server-support-common-ekaii
+          path: work/common/build/libs/common-*.jar
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-bookworm
+    defaults:
+      run:
+        working-directory: work
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+
+      - name: Build release jars
+        run: ./gradlew --no-daemon --console=plain :common:build :paper:shadowJar :fabric:build -x runGameTest -x runClientGameTest
+
+      - name: Install jq
+        run: apt-get update && apt-get install -y jq
+
+      - name: Create release with jars
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Build release body from tag annotation
+          TAG_BODY=$(git tag -l --format='%(contents)' "$REF_NAME")
+          if [ -z "$TAG_BODY" ]; then TAG_BODY="Release $REF_NAME"; fi
+          # Create release
+          RELEASE_JSON=$(jq -nc \
+            --arg name "$REF_NAME" \
+            --arg tag  "$REF_NAME" \
+            --arg body "$TAG_BODY" \
+            '{tag_name:$tag, name:$name, body:$body, draft:false, prerelease:false}')
+          REL=$(curl -fsS -X POST -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/json" \
+            "$CI_SERVER_URL/api/v1/repos/$REPO/releases" \
+            -d "$RELEASE_JSON")
+          REL_ID=$(echo "$REL" | jq -r '.id')
+          echo "release id: $REL_ID"
+          # Upload paper jar
+          curl -fsS -X POST -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/java-archive" \
+            --data-binary @paper/build/libs/lod-server-support-paper.jar \
+            "$CI_SERVER_URL/api/v1/repos/$REPO/releases/$REL_ID/assets?name=lod-server-support-paper.jar"
+          # Upload fabric jar
+          curl -fsS -X POST -H "Authorization: token $TOKEN" \
+            -H "Content-Type: application/java-archive" \
+            --data-binary @fabric/build/libs/lod-server-support-fabric.jar \
+            "$CI_SERVER_URL/api/v1/repos/$REPO/releases/$REL_ID/assets?name=lod-server-support-fabric.jar"
