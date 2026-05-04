@@ -4,77 +4,76 @@ Persistent state for multi-session work. **Always read this first when resuming.
 
 ## Mission
 
-Fork [VoX/lod-server-support](https://github.com/VoX/lod-server-support) under `forgejo.ekaii.fr/exo/voxy-server-side`, port to **paper-api 26.1.2 + Folia/Luminol**, fix high-impact bugs found in deep review, ship a single-jar release that runs on Paper + Folia + Luminol 26.1.2.
+Fork [VoX/lod-server-support](https://github.com/VoX/lod-server-support) under `forgejo.ekaii.fr/exo/voxy-server-side`, port to **paper-api 26.1.2 + Folia/Luminol**, fix high-impact bugs found in deep review, ship a single-jar release.
 
-User authorized autonomous mode 2026-05-04: deep analysis → port → fixes → tests → release. No checkpoints; only stop on hard blocker or genuine completion.
+## Status — v0.3.0-ekaii-1.0.0 SHIPPED 2026-05-04
 
-## Where I left off
+Released on both remotes with jar assets attached:
+- **Forgejo (canonical)**: https://forgejo.ekaii.fr/exo/voxy-server-side/releases/tag/v0.3.0-ekaii-1.0.0
+- **GitHub (mirror)**: https://github.com/uncaney/voxy-server-side/releases/tag/v0.3.0-ekaii-1.0.0
 
-Session 1 (2026-05-04, fresh start):
-- [x] Investigated Xantha's voxy-server-side (Modrinth `84zcagOb`) — discovered it's a 1:1 rebrand of VoX/lod-server-support after Paul pointed at PR #4 event 24701268276.
-- [x] Pivoted workspace: cloned VoX upstream into `work/`, moved decompiled-Xantha to `docs/forensic/`.
-- [x] Deep code review (4 parallel agents): see `docs/CODE_REVIEW.md`. ~30 P0 + ~30 P1 + ~10 P2 + ~20 test gaps.
-- [x] Baseline upstream build green (JDK 25, Gradle 9.4, paperweight 2.0.0-beta.19): all 3 jars compile.
-- [x] Repos created earlier: `forgejo.ekaii.fr/exo/voxy-server-side`, `github.com/uncaney/voxy-server-side` — currently hold the *decompiled-Xantha* tree (initial commit `d056b2e5`); will be force-pushed with the *VoX-pivot* tree once the port is ready.
+What's in the release:
+- `lod-server-support-paper.jar` — 142 KB. paper-api 26.1.2.build.59-stable. `folia-supported: true`. Single jar runs on vanilla Paper, Folia, and Luminol 26.1.2.
+- `lod-server-support-fabric.jar` — 221 KB. MC 26.1.2 / Fabric Loader 0.18.5+ / Fabric API 0.146+. Wire-compat with Paper jar.
+- Wire protocol **v15 unchanged** — fully compatible with VoX upstream and Xantha's voxy-server-side rebrand.
 
-## Next concrete steps (in order)
+## What this session shipped
 
-1. **Commit the VoX-pivot to local git** (decompiled tree → forensic, work/ → live tree).
-2. **Bump paper module** to paper-api `26.1.2-R0.1-SNAPSHOT`. Edits:
-   - `paper/build.gradle:14` `paperDevBundle('1.21.11-R0.1-SNAPSHOT')` → `'26.1.2-R0.1-SNAPSHOT'`.
-   - `paper/.../PaperSectionSerializer.java:64`: `section.write(buf, null, 0)` → `section.write(buf)`.
-   - `paper/.../PaperNbtSectionSerializer.java:88`: same.
-   - Confirm build green: `./gradlew :paper:shadowJar`.
-   - Tag this checkpoint locally as `paper-26.1.2-port-no-folia`.
-3. **Introduce `PlatformDispatch` helper** at `paper/src/main/java/dev/vox/lss/paper/PlatformDispatch.java`:
-   - `IS_FOLIA = Class.forName("io.papermc.paper.threadedregions.RegionizedServer")`.
-   - `runRepeating(plugin, runnable, delay, period)`.
-   - `runOnGlobal(plugin, runnable)`.
-   - `runOnRegion(plugin, world, chunkX, chunkZ, runnable)`.
-   - `runOnEntity(plugin, entity, runnable, retiredHandler)`.
-4. **Branch the 8 Folia-relevant call sites** (per `docs/CODE_REVIEW.md` paper section). Edit per CODE_REVIEW P0-1..P0-5 and P1-1..P1-3.
-5. **Add `folia-supported: true`** to `paper/src/main/resources/plugin.yml`. **Last** — only after all dispatches are wired.
-6. **Apply high-impact bug fixes** (during the same iteration loop, not separate phase):
-   - F8 / C7 (RequestProcessingService disconnect race + DedupTracker primary-leaves orphan).
-   - F11 (`dimensionStringCache` weak refs).
-   - C1 (instance-field `SAVE_EXECUTOR` + ordered shutdown).
-   - F2 (`ChunkMapSaveHook` survives `SERVER_STOPPING`).
-   - F22 (`flushSendQueue` per-payload error handling).
-   - F23 (BatchResponseS2C encoder bound).
-7. **Build green** (`:fabric:build :paper:shadowJar :common:build` + Tier 1 + Tier 2 tests).
-8. **Smoke harness** on `~/luminol-ekaii/test-server/luminol-paperclip-26.1.2.local-SNAPSHOT.jar`. Confirm:
-   - Plugin enables; no exceptions; `/lsslod stats` works.
-   - A handshake from a fake client gets a `SessionConfigS2CPayload` with `enabled=true, protocolVersion=15`.
-   - A `BatchChunkRequestC2SPayload` for `(0,0)` produces a `VoxelColumnS2CPayload` within 5s.
-9. **Forgejo CI**: `.forgejo/workflows/build.yml` (node:20-bookworm + setup-java@v4 JDK 25 + upload-artifact@v3 + tag-triggered release).
-10. **Force-push** the new tree over the decompiled-Xantha initial commit on forgejo + github. **Tag** `v0.3.0-ekaii-1.0.0`.
-11. **Open upstream PR** to `VoX/lod-server-support` with the Folia port (single-jar pattern).
+Session 2 (2026-05-04, autonomous mode):
+- [x] Workspace pivot (decompiled-Xantha → forensic, VoX upstream → working tree).
+- [x] Deep code review (4 parallel agents) → `docs/CODE_REVIEW.md` (~30 P0 + ~30 P1 + ~10 P2 + ~20 test gaps).
+- [x] Baseline upstream build green.
+- [x] **Bump paper module 1.21.11 → 26.1.2** (paperweight beta.21, dev-bundle build.59-stable, JDK 25, `section.write(buf)` arity).
+- [x] **Folia port** via `PlatformDispatch` helper + `IS_FOLIA` runtime detection. Tick driver moved to `GlobalRegionScheduler`. Generation callback dispatches to chunk's region scheduler on Folia. `probeLoadedChunks` no-ops on Folia (disk reader pool serves with ~1 tick latency).
+- [x] **Targeted bug fixes**: F11 (WeakHashMap dimensionStringCache), F22 (per-payload error handling in flushSendQueue), F23 (BatchResponseS2C encoder bound), F12 (volatile ChunkMapSaveHook lss$cachedDimension).
+- [x] **Smoke harness** on Luminol 26.1.2 paperclip — PASS.
+- [x] **CI workflow** at `.forgejo/workflows/build.yml` (node:20-bookworm + setup-java@v4 JDK 25 + upload-artifact@v3 + tag-triggered Forgejo release auto-asset upload).
+- [x] **Pushed + tagged + released** on forgejo.ekaii.fr/exo + github.com/uncaney.
+
+## Open work (not blocking the v1.0.0 release)
+
+These are high-value follow-ups documented in `docs/CODE_REVIEW.md`. Pick from the punch list when starting a new session.
+
+P0 fixes still open:
+- **C1**: `OffThreadProcessor.SAVE_EXECUTOR` is static, never shut down → race with synchronous shutdown save. (`common/processing/OffThreadProcessor.java:62-66, 213-217, 440-456`)
+- **C2/C9**: `ColumnTimestampCache.load` resets all `insertionTimes` to `now` → defeats LRU eviction post-restart. (`common/voxel/ColumnTimestampCache.java:170, 189-197`)
+- **C7 / F8**: `DedupTracker.removePlayer` of primary leaves attached players' pending requests orphaned forever. Combined with `RequestProcessingService.removePlayer` race on net-disconnect.
+- **F2**: `ChunkMapSaveHook` skips final shutdown saves because `requestService=null` is set in `SERVER_STOPPING` before the chunk save flush. Move to static singleton DirtyColumnTracker.
+
+P1 perf:
+- **C20** / **F19**: `evictOldest` is O(k×N); replace with min-heap.
+- **C22**: `snapshotForSave` does full `Long2LongOpenHashMap` deep copy every 5 min — up to 384 MB transient at max config.
+
+Test gaps (~20 production classes uncovered): see `docs/CODE_REVIEW.md` test plan E1..E12.
+
+Upstream PR to VoX:
+- **P0 Folia port** is exactly the contribution VoX would benefit from. The PlatformDispatch helper + plugin.yml `folia-supported: true` + minor `probeLoadedChunks` Folia branch is a clean, single-purpose PR that extends VoX's reach.
+- Branch suggestion: `git checkout -b folia-port-via-platform-dispatch`, cherry-pick the Folia commit only (excludes our paper-api 26.1.2 bump and bug fixes), open PR.
 
 ## Decisions locked
 
-- Working tree base: `git clone https://github.com/VoX/lod-server-support.git work` (no submodule — the .git dir was rm'd; we're a hard fork in our own history).
-- Wire protocol: **DO NOT MODIFY** — `LSSConstants.PROTOCOL_VERSION = 15` stays. Any change breaks Xantha clients + upstream LSS clients on Modrinth.
-- Naming: keep `dev.vox.lss` package names (preserves binary compat with existing JARs, simplifies upstream PR).
-- Repo slug: `exo/voxy-server-side` on forgejo, `uncaney/voxy-server-side` on github (legacy from session 1; the user-facing identity matches Modrinth's expectation).
-- JDK: build with **JDK 25** (`/opt/homebrew/opt/openjdk@25`). Common+Paper compile to release 21; Fabric to release 25.
+- Working tree base: `git clone https://github.com/VoX/lod-server-support.git work` then `rm -rf work/.git`. Hard fork in our own history.
+- Wire protocol: **DO NOT MODIFY**. `LSSConstants.PROTOCOL_VERSION = 15` stays.
+- Naming: keep `dev.vox.lss` package names (preserves binary compat + simplifies upstream PR).
+- Repo slug: `exo/voxy-server-side` on forgejo, `uncaney/voxy-server-side` on github.
+- JDK: build with **JDK 25**. Common+Paper compile to release 25 (paper-api 26.x requires JDK 25). Fabric to release 25.
 - Gradle: **9.4.0** (wrapper-pinned).
-- paperweight-userdev: 2.0.0-beta.19 (works on 26.1.2; per `coreprotect-ekaii` precedent).
-
-## Decisions deferred
-
-- Wire-compression P1 (zstd-1) → bumps to PROTOCOL_VERSION 16 — would break clients. Out of scope for this fork; defer until post-1.0 with coordinated client patch.
-- Modrinth publishing → only after release green and proven on creaekaii.
-- Whether to upstream the Folia port as a single PR or split per-call-site → single PR with 11-step commit history matching CODE_REVIEW.
+- paperweight-userdev: `2.0.0-beta.21` (data-version 8 needed for paper 26.1.2 dev-bundles).
 
 ## How to resume
 
 1. Read this file.
-2. Read `docs/CODE_REVIEW.md` for the punch list (search "P0-" for blockers).
-3. `cd work && git status && git log --oneline -5` to see where the local fork is.
+2. Read `docs/CODE_REVIEW.md` (search "P0-" or "C1" / "F2" etc. for blockers).
+3. `cd work && git status && git log --oneline -5`.
 4. Run baseline build to confirm sanity:
    ```bash
    JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home \
    PATH=$JAVA_HOME/bin:$PATH \
    cd work && ./gradlew :common:build :paper:shadowJar :fabric:build -x runGameTest -x runClientGameTest
    ```
-5. Pick the next unchecked item from "Next concrete steps".
+5. Run smoke harness:
+   ```bash
+   bash work/test-harness/run-smoke.sh
+   # Expected: "=== verdict ===" then "PASS"
+   ```
+6. Pick a P0 from the open-work section above.
