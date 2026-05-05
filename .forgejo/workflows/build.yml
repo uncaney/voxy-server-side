@@ -1,0 +1,60 @@
+name: Build VSS 1.21.11 ekaii (paper)
+
+on:
+  push:
+    branches: [ekaii-1.21.11, mc/1.21.11]
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-bookworm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle', 'gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Build paper jar
+        run: ./gradlew --no-daemon --console=plain :paper:shadowJar
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: lod-server-support-paper-1.21.11-ekaii
+          path: paper/build/libs/lod-server-support-paper.jar
+          if-no-files-found: error
+
+      - name: Create release on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          apt-get update -qq && apt-get install -qq -y jq curl
+          TAG=${GITHUB_REF#refs/tags/}
+          API="${GITHUB_SERVER_URL}/api/v1/repos/${GITHUB_REPOSITORY}"
+          BODY="VSS 1.21.11 ekaii: Folia/Luminol port + bug fixes (F11/F22). Built from \`${GITHUB_SHA}\`."
+          REL=$(curl -fsS -X POST -H "Authorization: token $TOKEN" -H "Content-Type: application/json" \
+            "$API/releases" \
+            -d "$(jq -n --arg t "$TAG" --arg b "$BODY" '{tag_name:$t,name:$t,target_commitish:"mc/1.21.11",body:$b,draft:false,prerelease:false}')")
+          REL_ID=$(echo "$REL" | jq -r .id)
+          curl -fsS -X POST -H "Authorization: token $TOKEN" \
+            -F "attachment=@paper/build/libs/lod-server-support-paper.jar" \
+            "$API/releases/${REL_ID}/assets?name=lod-server-support-paper-1.21.11.jar"
