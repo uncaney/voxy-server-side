@@ -12,6 +12,7 @@ import dev.vox.lss.common.processing.TickDiagnostics;
 import dev.vox.lss.common.processing.TickSnapshot;
 import dev.vox.lss.common.tracking.DirtyColumnTracker;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMaps;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.server.MinecraftServer;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -46,7 +48,7 @@ public class PaperRequestProcessingService {
     private final PaperDirtyColumnBroadcaster dirtyBroadcaster;
 
     private final long startTimeNanos = System.nanoTime();
-    private final Map<ServerLevel, String> dimensionStringCache = new HashMap<>();
+    private final Map<ServerLevel, String> dimensionStringCache = new WeakHashMap<>();
 
     private int diagLogCounter = 0;
 
@@ -298,6 +300,9 @@ public class PaperRequestProcessingService {
     private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
             PaperPlayerRequestState state, ServerLevel level,
             LongOpenHashSet skipPositions) {
+        if (PlatformDispatch.IS_FOLIA) {
+            return Long2ObjectMaps.emptyMap();
+        }
         var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
         int probed = 0;
 
@@ -386,10 +391,10 @@ public class PaperRequestProcessingService {
                 this.bandwidthLimiter.recordSend(queued.estimatedBytes());
                 this.diag.recordSectionSent(queued.estimatedBytes());
             } catch (Exception e) {
-                LSSLogger.error("Failed to send queued payload to " + state.getPlayer().getName().getString()
-                        + ", dropping remaining queue (" + queue.size() + " entries)", e);
-                queue.clear();
-                return;
+                LSSLogger.warn("Failed to send queued payload to "
+                        + state.getPlayer().getName().getString()
+                        + " (requestId=" + queued.requestId() + "), dropping this payload only", e);
+                queue.poll();
             }
         }
     }
